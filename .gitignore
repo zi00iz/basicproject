@@ -1,0 +1,28 @@
+# .env
+.env
+
+.vscode
+
+#vi .gitignore
+
+## maven
+maven/**/target
+
+##.json
+pj_node/json/*
+
+##nodejs
+pj_node/**/node_modules
+pj_node/**/package-lock.json
+pj_node/**/*.json
+pj_node/conf/**
+
+##python venv
+pj_py/**/.venv
+pj_py/**/__pycache__/
+pj_py/**/secret.json
+
+## oracle
+basic/dbConfig.js
+basic/node_modules
+basicproject/../package-lock.json
