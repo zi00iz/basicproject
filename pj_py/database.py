@@ -1,8 +1,8 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+import pymysql
 import os.path
 import json
-from models import Base
+
+# from models import Base
 
 # 기본 디렉토리 설정
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -17,10 +17,10 @@ def get_secret(setting, secrets=secrets):
     try:
         return secrets[setting]
     except KeyError:
-        errorMsg = "Set the {} environment variable.".format(setting)
+        errorMsg = "Set the {setting} environment variable."
         return KeyError(errorMsg)
 
-# 데이터베이스 연결 정보 설정
+# MYSQL 데이터베이스 연결 정보 설정
 HOSTNAME = get_secret("Mysql_Hostname")
 PORT = get_secret("Mysql_Port")
 USERNAME = get_secret("Mysql_Username")
@@ -28,28 +28,43 @@ PASSWORD = get_secret("Mysql_Password")
 DBNAME = get_secret("Mysql_DBname")
 
 # 데이터베이스 URL 구성
-DB_URL = f'mysql+pymysql://{USERNAME}:{PASSWORD}@{HOSTNAME}:{PORT}/{DBNAME}'
+# DB_URL = f'mysql+pymysql://{USERNAME}:{PASSWORD}@{HOSTNAME}:{PORT}/{DBNAME}'
 
-class db_conn:
-    #세션 생성자 초기화
+class dbConn:
     def __init__(self):
-        self.engine = create_engine(DB_URL, pool_recycle=500, echo=True)  # echo=True는 로그를 활성화합니다.
+        self.connection = None
 
-    #데이터베이스 세션 생성
-    def sessionmaker(self):
-        Session = sessionmaker(bind=self.engine)
-        session = Session()
-        return session
+    # 데이터베이스 연결
+    def connect(self):
+        if not self.connection:
+            self.connection = pymysql.connect(host=HOSTNAME,
+                                                user=USERNAME,
+                                                password=PASSWORD,
+                                                db=DBNAME,
+                                                port=int(PORT),
+                                                charset='utf8',
+                                                cursorclass=pymysql.cursors.DictCursor)
+        return self.connection
+
+    # 커서 가져오기
+    def get_cursor(self):
+        if self.connection:
+            return self.connection.cursor()
+        else:
+            raise Exception("Database connection not established.")
     
-    #데이터베이스 직접 연결
-    def connection(self):
-        conn = self.engine.connect()
-        return conn
-    
-    #세션 닫기
+    # 연결 닫기
     def close(self):
-        self.connection.close()
-
-    # 세션에 대한 롤백 수행
+        if self.connection:
+            self.connection.close()
+            self.connection = None
+    
+    # 롤백 수행
     def rollback(self):
-        self.session.rollback()
+        if self.connection:
+            self.connection.rollback()
+
+    #커밋 수행
+    def commit(self):
+        if self.connection:
+            self.connection.commit()

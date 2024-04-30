@@ -1,101 +1,117 @@
+import os
 import math
 import uvicorn
 import requests, json
 from fastapi import FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
+import pymongo
+from pymongo import MongoClient
 import pymysql
-# from pydantic import BaseModel
-from database import db_conn
-from models import Sidx
-from typing import Union, Optional, List
+from pydantic import BaseModel
+from typing import Optional
+from database import dbConn
+
+# Mongodb 설정
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+secret_file = os.path.join(BASE_DIR, 'secret.json')
+
+# secret 파일 읽어오기
+with open(secret_file) as f:
+    secrets = json.loads(f.read())
+
+def get_secret(setting, secrets=secrets):
+    try:
+        return secrets[setting]
+    except KeyError:
+        errorMsg = "Set the {} environment variable.".format(setting)
+        return errorMsg
+
+HOSTNAME = get_secret("Mongo_Hostname")
+USERNAME = get_secret("Mongo_Username")
+PASSWORD = get_secret("Mongo_Password")
+
+client = MongoClient(f'mongodb://{USERNAME}:{PASSWORD}@{HOSTNAME}' )
+print ('Connected to Mongodb ... ')
+
+mymon = client['bikeproject']
+mycolbus = mymon['buspath']
+mycolsub = mymon['subwaypath']
 
 app = FastAPI()
+db = dbConn()
 
-db = db_conn()
-session = db.sessionmaker()
-
-# json_url = 'jiyoung json 서버/'
-
-# #savesql
-# @app.get("/saveSql")
-# async def save_sql():
-#     response = requests.get("API주소")
-
-#     if response.status_code != 200:
-#         raise HTTPException(status_code=400, detail="정보를 가져오는 것에 실패했습니다.")
-
-#     #응답 데이터를 JSON 형태로 변환
-#     data = response.json()
-
-# @app.get("/getMongo")
-# async def get_mongo():
-#     response = requests.get("지원주소")
     
-#     if response.status_code != 200:
-#         raise HTTPException(status_code=400, detail="정보를 가져오는 것에 실패했습니다.")
-    
-    
+#savesql : jiwon에게 최적화 기록(sqlData)받기
+@app.post("/saveSql")
+async def save_sql(data:dict):  #(SearchId, Sx, Sy, Ex, Ey, STotalTime, STotalDistance, BTotalTime, BTotalDistance, Optipath, Diff)
+    values = tuple(data.values())
+    try:
+        db.connect()  # 데이터베이스 연결
+        cursor = db.get_cursor()  # 커서 가져오기
+        sql = "INSERT INTO `test` (SearchId, Sx, Sy, Ex, Ey, STotalTime, STotalDistance, BTotalTime, BTotalDistance, Optipath, Diff) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        cursor.execute(sql, tuple(values))
+        db.commit()
 
-# 파라미터로 받은 사용자의 데이터와 비교하기
+    except Exception as e:
+        raise HTTPException(status_code=500, detail = str(e))
+
+    return "ok"
+
+# /saveMongo : 요청해서 mongo에 넣을 data 받기
+@app.post("/getMongo/")
+async def get_mongo(data:dict): #{"BId": "0007"}
+    try:
+        response = requests.get("http://192.168.1.64:3000/getMongo")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch data: {str(e)}")
+
+    data = response.json()  # 전달 받은 데이터를 JSON 형태로 변환
+    print(data)
+    pathlist = data.get("path_list", [])
+    print(pathlist)
+
+    for data_item in pathlist:
+        idtype = data_item.get('SearchId')
+        if idtype == 'BId':
+            mycolbus.insert_one(data_item)
+        elif idtype == 'SId':
+            mycolsub.insert_one(data_item)
+
+    result = mycolbus.find_one({"BId": "0007"}, {"_id":0})
+    return result
+
+# 사용자에게 값 받아서 연산 후 유사 경로 리스트업
 def calculate_distance(x1, y1, x2, y2):
+    
     return math.sqrt((float(x2) - float(x1)) ** 2 + (float(y2) - float(y1)) ** 2)
 
 @app.get("/favpath/")
-async def pop_path(sx: str, sy: str, ex: str, ey: str):
-    print(sx, sy, ex, ey )
-    connection = db.connection()  # 데이터베이스 연결 생성
+async def pop_favpath(sx: str, sy: str, ex: str, ey: str):
     try:
-        cursor = connection.cursor()  # 커서 생성
-        cursor.execute("SELECT * FROM sidx")
+        db.connect()  # 데이터베이스 연결
+        cursor = db.get_cursor()  # 커서 가져오기
+        sql = "SELECT * FROM `sidx`"
+        cursor.execute(sql)
         rows = cursor.fetchall()
 
-        matched_paths = []
-
-        for row in rows:
-            start_distance = calculate_distance(sx, sy, row[1], row[2])
-            end_distance = calculate_distance(ex, ey, row[3], row[4])
-
-            #거리 계산하기
-            if start_distance <= 0.0045 and end_distance <= 0.0045:
-                matched_paths.append({
-                    'Sid': row[0],
-                    'Sx': row[1],
-                    'Sy': row[2],
-                    'Ex': row[3],
-                    'Ey': row[4],
-                    'Type': row[5]
-                })
-
-        return matched_paths
-        
-        
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        connection.close()
+        raise HTTPException(status_code=500)
 
-# @app.get('/endbike/', response_model=List[StationInfo])
-# async def endbike(ex: float, ey: float):
-#     # JSON 서버에서 데이터 가져오기
-#     response = requests.get(json_url)
-#     if response.status_code != 200:
-#         raise HTTPException(status_code=404, detail="JSON 데이터를 불러오는데 실패했습니다.")
-#     data = response.json()
+    # print(rows)
 
-#     nearby_stations = []
+    matched_paths = []
+    # sx, sy, ex, ey = map(float, [sx, sy, ex, ey])
 
-#     #연산 및 조건식
-#     for item in data:
-#         # 사용자의 좌표와 각 스테이션의 좌표 간의 거리 계산
-#         distance = calculate_distance(ex, ey, item['x'], item['y'])
-#         # 거리가 500 이하인 경우 리스트에 추가
-#         if distance <= 0.0045:
-#             nearby_stations.append(StationInfo(**item))
+    for row in rows:
+        start_distance = calculate_distance(sx, sy, row['Sx'], row['Sy'])
+        end_distance = calculate_distance(ex, ey, row['Ex'], row['Ey'])
+        
+        if start_distance <= 0.0045 and end_distance <= 0.0045:
+            matched_paths.append(row)
 
-#     return nearby_stations
+    print(matched_paths)
+    return matched_paths
 
-# if __name__ == '__main__':
-#     uvicorn.run(app, host="0.0.0.0", port=5000)
-
-# @app.get('/')
+# @app.get("/getEndBike")
+# async def getEndBike():
+#     print(data)
