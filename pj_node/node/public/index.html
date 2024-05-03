@@ -1,0 +1,60 @@
+<!-- <!DOCTYPE html>
+<html>
+<head>
+<title>현재 위치 표시</title>
+</head>
+<body>
+
+<p>위도: <span id="latitude"></span></p>
+<p>경도: <span id="longitude"></span></p>
+
+<button onclick="getLocation()">위치 가져오기</button>
+
+<script>
+// 사용자의 위치를 가져오는 함수
+function getLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(showPosition, showError);
+    } else { 
+        alert("Geolocation을 지원하지 않는 브라우저입니다.");
+    }
+}
+
+// 위치 정보를 받아와서 HTML에 표시하는 함수
+function showPosition(position) {
+    document.getElementById("latitude").innerHTML = position.coords.latitude;
+    document.getElementById("longitude").innerHTML = position.coords.longitude;
+}
+
+// 에러 처리 함수
+function showError(error) {
+    switch(error.code) {
+        case error.PERMISSION_DENIED:
+            alert("사용자가 위치 정보 사용을 거부했습니다.");
+            break;
+        case error.POSITION_UNAVAILABLE:
+            alert("위치 정보를 사용할 수 없습니다.");
+            break;
+        case error.TIMEOUT:
+            alert("요청 시간 초과");
+            break;
+        case error.UNKNOWN_ERROR:
+            alert("알 수 없는 오류 발생");
+            break;
+    }
+}
+</script>
+
+</body>
+</html> -->
+
+
+//     try {
+    //         const connection = await mysql.createConnection(mysqlConfig);
+    //         const [rows] = await connection.execute(query, [sx, sy, ex, ey]);
+    //         res.json({ success: true, data: rows });
+    //         await connection.end();
+    //     } catch (error) {
+    //         console.error(error);
+    //         res.status(500).json({ success: false, message: "서버 오류 발생" });
+    //     }
