@@ -103,7 +103,7 @@ async def pop_favpath(sx: str, sy: str, ex: str, ey: str):
     try:
         db.connect()  # 데이터베이스 연결
         cursor = db.get_cursor()  # 커서 가져오기
-        sql = "SELECT * FROM `test`"
+        sql = "SELECT * FROM `sidx`"
         cursor.execute(sql)
         rows = cursor.fetchall()
 
